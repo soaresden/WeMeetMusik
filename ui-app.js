@@ -105,8 +105,8 @@ const UIApp = {
 
             const nomFichier = partition.nom_fichier || '';
             const uploadBtn = `<button class="btn-upload" data-partition-id="${partition.id}" title="Ajouter fichier MIDI">🎼</button>`;
-            const playBtn = `<button class="btn-play" data-partition-id="${partition.id}" data-filename="${nomFichier}" title="Jouer MIDI">▶️</button>`;
-            const fichierDisplay = `<div style="display: flex; gap: 6px; align-items: center; justify-content: flex-start;">${playBtn} ${uploadBtn} <input type="text" value="${nomFichier}" class="table-input" data-partition-id="${partition.id}" data-field="nom_fichier" placeholder="..." style="flex: 1; max-width: 100px;"></div>`;
+            const youtubeLink = `<a href="#" class="btn-youtube" data-title="${partition.title}" data-artist="${partition.artist}" style="color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer;">Youtube</a>`;
+            const fichierDisplay = `<div style="display: flex; gap: 6px; align-items: center; justify-content: flex-start;">${youtubeLink} ${uploadBtn} <input type="text" value="${nomFichier}" class="table-input" data-partition-id="${partition.id}" data-field="nom_fichier" placeholder="..." style="flex: 1; max-width: 100px;"></div>`;
 
             tr.innerHTML = `
                 <td><strong>${partition.title}</strong></td>
@@ -165,54 +165,18 @@ const UIApp = {
             });
         });
 
-        // Event listeners pour les boutons play
-        document.querySelectorAll('.btn-play').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const filename = e.target.dataset.filename;
-                const partitionId = e.target.dataset.partitionId;
+        // Event listeners pour les liens Youtube
+        document.querySelectorAll('.btn-youtube').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const title = e.target.dataset.title;
+                const artist = e.target.dataset.artist;
 
-                // Récupérer le titre et artiste de la partition
-                const titleCell = e.target.closest('tr')?.querySelector('td:first-child')?.innerText || '';
-                const artistCell = e.target.closest('tr')?.querySelector('td:nth-child(2)')?.innerText || '';
+                const query = `${title} ${artist}`;
+                const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 
-                if (e.target.classList.contains('playing')) {
-                    // Stop playback
-                    try {
-                        if (window.currentYouTubePlayer) {
-                            window.currentYouTubePlayer.pauseVideo?.();
-                        } else if (window.currentMidiPlayer) {
-                            if (window.currentMidiPlayer.pause) {
-                                window.currentMidiPlayer.pause();
-                            } else {
-                                await Tone.Transport.stop();
-                                Tone.Transport.cancel();
-                            }
-                        }
-                    } catch (err) {
-                        console.warn('Erreur lors du stop:', err);
-                    }
-                    e.target.classList.remove('playing');
-                    e.target.textContent = '▶️';
-                    localStorage.removeItem('currentPlayingPartition');
-                    console.log(`⏹️ Lecture arrêtée`);
-                } else {
-                    // Chercher sur YouTube et jouer
-                    e.target.classList.add('playing');
-                    e.target.textContent = '⏸️ (cherche...)';
-
-                    console.log(`🔍 Cherchant: ${titleCell} - ${artistCell}`);
-
-                    try {
-                        const result = await UIApp.searchSpotifyPreview(titleCell, artistCell);
-                        await UIApp.playSpotifyPreview(result, e.target);
-                        e.target.textContent = '⏸️';
-                    } catch (error) {
-                        console.error('Erreur lecture:', error);
-                        e.target.classList.remove('playing');
-                        e.target.textContent = '▶️';
-                        alert(`Impossible de jouer: ${error.message}`);
-                    }
-                }
+                console.log(`🔍 Ouverture YouTube: "${query}"`);
+                window.open(youtubeSearchUrl, '_blank', 'width=1200,height=800');
             });
         });
 

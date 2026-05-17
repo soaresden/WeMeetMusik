@@ -1066,30 +1066,28 @@ input[type="text"]:focus {
         min-height: 28px;
     }
 
-    /* Cacher colonnes pour mobile */
-    .partitions-table th:nth-child(2),
-    .partitions-table td:nth-child(2),
+    /* Cacher colonnes pour mobile: User, Status, Fichier */
     .partitions-table th:nth-child(3),
     .partitions-table td:nth-child(3),
     .partitions-table th:nth-child(4),
-    .partitions-table td:nth-child(4) {
-        display: none; /* Masquer Artiste, User, Status */
-    }
-
-    /* Montrer seulement Titre et Fichier/Boutons */
+    .partitions-table td:nth-child(4),
     .partitions-table th:nth-child(5),
     .partitions-table td:nth-child(5) {
-        display: table-cell;
+        display: none; /* Masquer User, Status, Fichier */
     }
 
-    /* Masquer les compteurs de statuts sur mobile */
+    /* Garder visible: Titre, Artiste, et statuts */
+    .partitions-table th:nth-child(1),
+    .partitions-table td:nth-child(1),
+    .partitions-table th:nth-child(2),
+    .partitions-table td:nth-child(2),
     .partitions-table th:nth-child(6),
     .partitions-table td:nth-child(6),
     .partitions-table th:nth-child(7),
     .partitions-table td:nth-child(7),
     .partitions-table th:nth-child(8),
     .partitions-table td:nth-child(8) {
-        display: none;
+        display: table-cell;
     }
 
     /* Delete button reste visible */
