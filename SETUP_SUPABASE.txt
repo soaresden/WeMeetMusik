@@ -1,0 +1,156 @@
+═══════════════════════════════════════════════════════════════════════════════
+                        GUIDE SUPABASE - SETUP COMPLET
+═══════════════════════════════════════════════════════════════════════════════
+
+Tu as déjà créé les tables SQL. Maintenant il faut :
+
+1️⃣  RÉCUPÉRER TES CLÉS SUPABASE
+─────────────────────────────────────────────────────────────────────────────
+
+Va sur : https://app.supabase.com/
+1. Clique sur ton projet
+2. Clique "Settings" (engrenage en bas à gauche)
+3. Clique "API"
+4. Tu vois :
+   - "Project URL" → Copy
+   - "anon public" → Copy (c'est la clé)
+   - "service_role secret" → Copy (ne la partage PAS)
+
+
+2️⃣  METTRE À JOUR supabaseConfig.js
+─────────────────────────────────────────────────────────────────────────────
+
+Ouvre le fichier supabaseConfig.js et remplace :
+
+const SUPABASE_URL = 'TA_PROJECT_URL_ICI';
+const SUPABASE_ANON_KEY = 'TA_CLE_ANON_ICI';
+
+
+EXEMPLE :
+const SUPABASE_URL = 'https://abc123xyz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+
+
+3️⃣  ACTIVER L'AUTHENTIFICATION (optionnel pour l'instant)
+─────────────────────────────────────────────────────────────────────────────
+
+Pour que chaque utilisateur puisse se connecter avec un email :
+
+1. Va dans Supabase : "Authentication" → "Providers"
+2. Active "Email" (c'est déjà fait par défaut)
+
+
+4️⃣  CONFIGURER LES PERMISSIONS (très important)
+─────────────────────────────────────────────────────────────────────────────
+
+Va dans "Database" → "RLS (Row Level Security)"
+
+Pour chaque table, clique et active "RLS" puis ajoute les règles :
+
+TABLE: users
+  - SELECT : Autorisé pour tout le monde
+  - INSERT : Autorisé pour tout le monde
+  - UPDATE : Autorisé pour son propre utilisateur
+  - DELETE : Autorisé pour admin
+
+TABLE: partitions
+  - SELECT : Autorisé pour tout le monde
+  - INSERT : Autorisé pour tout le monde
+  - UPDATE : Autorisé pour le créateur
+  - DELETE : Autorisé pour le créateur
+
+TABLE: user_statuses
+  - SELECT : Autorisé pour tout le monde
+  - INSERT : Autorisé pour tout le monde
+  - UPDATE : Autorisé pour son propre statut
+  - DELETE : Autorisé pour son propre statut
+
+TABLE: activity_logs
+  - SELECT : Autorisé pour tout le monde
+  - INSERT : Autorisé pour tout le monde
+
+
+5️⃣  TESTER LA CONNEXION
+─────────────────────────────────────────────────────────────────────────────
+
+1. Ouvre index.html dans le navigateur
+2. Ouvre la Console (F12)
+3. Tu devrais voir : ✅ Supabase initialized
+
+Si tu vois une erreur, c'est que les clés ne sont pas bonnes.
+
+
+6️⃣  METTRE À JOUR userData.js ET ui.js
+─────────────────────────────────────────────────────────────────────────────
+
+Pour que l'app utilise VRAIMENT Supabase, il faut modifier :
+- userData.js : remplacer localStorage par supabase.from('table')
+- ui.js : adapter les appels
+
+C'est la partie "intégration" - on la fait si tu veux.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                            COMMANDES SQL RECAP
+═══════════════════════════════════════════════════════════════════════════════
+
+Si tu veux refaire les tables (backup) :
+
+-- Users
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  instruments TEXT[] NOT NULL,
+  email TEXT UNIQUE,
+  created_at TIMESTAMP DEFAULT now()
+);
+
+-- Partitions
+CREATE TABLE partitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  artist TEXT NOT NULL,
+  fileName TEXT NOT NULL,
+  fileSize TEXT,
+  userId UUID REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT now()
+);
+
+-- User Statuses
+CREATE TABLE user_statuses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userId UUID REFERENCES users(id) ON DELETE CASCADE,
+  partitionId UUID REFERENCES partitions(id) ON DELETE CASCADE,
+  status TEXT CHECK (status IN ('working', 'todo')),
+  timestamp TIMESTAMP DEFAULT now(),
+  UNIQUE(userId, partitionId)
+);
+
+-- Activity Logs
+CREATE TABLE activity_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  userId UUID REFERENCES users(id) ON DELETE CASCADE,
+  userName TEXT,
+  action TEXT NOT NULL,
+  details TEXT,
+  timestamp TIMESTAMP DEFAULT now()
+);
+
+-- Index pour performance
+CREATE INDEX idx_partitions_userId ON partitions(userId);
+CREATE INDEX idx_user_statuses_userId ON user_statuses(userId);
+CREATE INDEX idx_user_statuses_partitionId ON user_statuses(partitionId);
+CREATE INDEX idx_activity_logs_userId ON activity_logs(userId);
+CREATE INDEX idx_activity_logs_timestamp ON activity_logs(timestamp DESC);
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                            PROCHAINES ÉTAPES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Remplir supabaseConfig.js avec TES clés
+2. Tester que ça marche (F12 → Console → voir ✅)
+3. Si ok : on intègre userData.js et ui.js pour vraiment utiliser Supabase
+4. Si besoin : on ajoute l'authentification par email
+
+═══════════════════════════════════════════════════════════════════════════════

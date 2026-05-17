@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeMeetMusik - Partitions Musicales</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.0/jsencrypt.min.js"></script>
+    <script src="https://mega.io/js/mega.min.js"></script>
+</head>
+<body>
+    <!-- Page de Login -->
+    <div id="loginPage" class="page active">
+        <div class="login-wrapper">
+            <!-- GAUCHE - LOGIN -->
+            <div class="login-section">
+                <div class="login-content">
+                    <h1>🎵 WeMeetMusik</h1>
+                    <p class="tagline">Gestionnaire de Partoche et de Travail Musical WeMeet 😎</p>
+
+                    <h2>Qui es-tu?</h2>
+                    <div id="usersList" class="users-tiles">
+                        <!-- Rempli dynamiquement depuis Supabase -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- DROITE - REGISTER -->
+            <div class="register-section">
+                <div class="register-content">
+                    <h2>Nouvel utilisateur</h2>
+
+                    <input type="text" id="newUsername" placeholder="Ton nom">
+
+                    <label>Tes instruments :</label>
+                    <div class="instruments-grid" id="instrumentsGrid">
+                        <!-- Rempli dynamiquement depuis Supabase -->
+                    </div>
+
+                    <div class="custom-instrument-section">
+                        <label>Instrument custom:</label>
+                        <div class="custom-input-group">
+                            <input type="text" id="customInstrument" placeholder="Ex: Saxophone, Ukulélé, etc.">
+                            <button type="button" id="addCustomBtn" class="btn-secondary">+ Ajouter</button>
+                        </div>
+                        <div id="customInstrumentsList" class="custom-instruments-list"></div>
+                    </div>
+
+                    <button id="registerBtn" class="btn-primary">Créer compte</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Overlay pour Partition -->
+    <div id="partitionModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modalPartitionTitle"></h2>
+                    <div class="artist" id="modalPartitionArtist"></div>
+                </div>
+                <button class="modal-close" id="modalCloseBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="partition-viewer">
+                    <p>📄 Partition MuseScore</p>
+                    <p id="modalFileFormat"></p>
+                    <p id="modalFileSize"></p>
+                    <div class="file-info">
+                        <div>📥 <a id="modalDownloadLink" href="#" target="_blank">Télécharger depuis MEGA</a></div>
+                        <div style="margin-top: 10px; font-size: 0.75em; color: #888;">
+                            💡 Ouvre dans MuseScore ou télécharge le fichier pour lire
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Principale -->
+    <div id="appPage" class="page">
+        <div class="app-header">
+            <h1>🎵 WeMeetMusik</h1>
+            <div class="user-info">
+                <span id="currentUser"></span>
+                <button id="logoutBtn" class="btn-secondary">Déconnexion</button>
+            </div>
+        </div>
+
+        <div class="app-container">
+            <!-- ZONE TABLEAU -->
+            <div class="table-zone">
+                <!-- SEARCH & LIBRESCORE -->
+                <div class="search-bar-top">
+                    <input type="text" id="searchPartitions" placeholder="Chercher une partition...">
+                    <div class="librescore-search">
+                        <input type="text" id="libreScoreSearch" placeholder="Chercher sur LibreScore...">
+                        <button id="searchBtn" class="btn-primary">🔍</button>
+                    </div>
+                </div>
+
+                <!-- TABLEAU PARTITIONS -->
+                <div class="partitions-table-wrapper">
+                    <table class="partitions-table" id="partitionsTable">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Titre</th>
+                                <th>Artiste</th>
+                                <th>Travaille</th>
+                                <th>Todo</th>
+                                <th>Sait faire</th>
+                            </tr>
+                        </thead>
+                        <tbody id="partitionsTableBody">
+                            <!-- Rempli dynamiquement -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- FILTER BY USER -->
+                <div class="filter-bar">
+                    <label>Filtrer par user:</label>
+                    <select id="userFilter" class="filter-select">
+                        <option value="">Tous</option>
+                    </select>
+                </div>
+
+                <!-- NOUVELLE PARTITION -->
+                <div class="new-partition-form">
+                    <div class="form-title">➕ Ajouter une partition souhaitée</div>
+                    <div class="form-inputs">
+                        <input type="text" id="newPartitionTitle" placeholder="Titre" class="form-input">
+                        <input type="text" id="newPartitionArtist" placeholder="Artiste" class="form-input">
+                        <input type="text" id="newPartitionFileName" placeholder="Nom fichier (optionnel)" class="form-input">
+                        <div class="form-status-group">
+                            <label class="form-status-option">
+                                <input type="checkbox" id="newPartitionWorking"> Je travaille
+                            </label>
+                            <label class="form-status-option">
+                                <input type="checkbox" id="newPartitionTodo"> Todo
+                            </label>
+                            <label class="form-status-option">
+                                <input type="checkbox" id="newPartitionSkilled"> Je sais la faire
+                            </label>
+                        </div>
+                        <button id="addPartitionBtn" class="btn-primary">Ajouter</button>
+                    </div>
+                </div>
+
+                <!-- ZONE RECHERCHE LIBRESCORE -->
+                <div id="searchResults" class="search-results-area"></div>
+            </div>
+
+            <!-- ZONE PARTITION (DROITE) -->
+            <div class="partition-display-zone">
+                <div id="noSelection" class="no-selection">
+                    <p>👈 Sélectionne une partition</p>
+                </div>
+
+                <div id="partitionDisplay" class="partition-display" style="display: none;">
+                    <div class="partition-header">
+                        <h2 id="partitionTitle"></h2>
+                        <p id="partitionArtist" class="artist"></p>
+                        <div class="partition-actions">
+                            <button id="deletePartitionBtn" class="btn-delete">🗑️ Supprimer</button>
+                        </div>
+                    </div>
+
+                    <div class="partition-status">
+                        <div class="status-section">
+                            <h3>Qui travaille dessus ?</h3>
+                            <div id="workingOnList" class="people-list"></div>
+                        </div>
+
+                        <div class="status-section">
+                            <h3>Todo list</h3>
+                            <div id="todoList" class="people-list"></div>
+                        </div>
+
+                        <div class="status-section">
+                            <h3>Qui sait la faire</h3>
+                            <div id="skilledList" class="people-list"></div>
+                        </div>
+
+                        <div class="status-section">
+                            <h3>Ton statut</h3>
+                            <div class="buttons-group">
+                                <button id="markWorkingBtn" class="btn-status">Je travaille</button>
+                                <button id="markTodoBtn" class="btn-status">Todo</button>
+                                <button id="markSkilledBtn" class="btn-status">Je sais la faire</button>
+                                <button id="clearStatusBtn" class="btn-status">Supprimer mon statut</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="partition-preview">
+                        <button id="viewPartitionBtn" class="btn-primary" style="margin: 0 0 10px 0;">👁️ Voir la partition</button>
+                        <h3>Infos</h3>
+                        <div id="partitionContent" class="content-placeholder">
+                            📄 Format: <span id="fileFormat"></span> | Taille: <span id="fileSize"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANNEAU EN LIGNE + ACTIVITÉ -->
+        <div class="activity-panel">
+            <div class="panel-left">
+                <h3>🟢 En ligne</h3>
+                <div id="onlineUsersList" class="users-list"></div>
+            </div>
+            <div class="panel-right">
+                <h3>📊 Activité</h3>
+                <div id="activityLog" class="activity-log"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="megaPublicHelper.js"></script>
+    <script src="libreScoreHelper.js"></script>
+    <script src="supabaseConfig.js"></script>
+    <script src="supabaseInstruments.js"></script>
+    <script src="userData.js"></script>
+    <script src="ui.js"></script>
+    <script src="libreScoreUI.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

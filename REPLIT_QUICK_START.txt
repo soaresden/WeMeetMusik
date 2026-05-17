@@ -1,0 +1,129 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    🚀 REPLIT SETUP - QUICK START
+═══════════════════════════════════════════════════════════════════════════════
+
+
+ÉTAPE 1 : Créer le Replit
+─────────────────────────────────────────────────────────────────────────────
+
+1. Va sur https://replit.com
+2. Clique "+ Create"
+3. Clique "Create Replit"
+4. Choisis : Language = "Node.js"
+5. Nomme-le : "wemeet-mega-upload"
+6. Clique "Create Replit"
+
+
+ÉTAPE 2 : Copier le code
+─────────────────────────────────────────────────────────────────────────────
+
+1. Dans Replit, tu vas voir un fichier "index.js" vide
+2. Copie TOUT le code de "replit-server.js" (ce fichier)
+3. Colle-le dans "index.js" sur Replit
+
+
+ÉTAPE 3 : Mettre à jour package.json
+─────────────────────────────────────────────────────────────────────────────
+
+1. À gauche dans Replit, clique sur "package.json"
+2. Remplace TOUT son contenu par le contenu de "replit-package.json"
+3. Sauvegarde (Ctrl+S)
+
+
+ÉTAPE 4 : Installer les dépendances
+─────────────────────────────────────────────────────────────────────────────
+
+1. Clique sur "Shell" en bas à droite
+2. Tape cette commande :
+
+   npm install
+
+3. Attends que ça finisse (2-3 min)
+4. Tu devrais voir : "added X packages"
+
+
+ÉTAPE 5 : Lancer le serveur
+─────────────────────────────────────────────────────────────────────────────
+
+1. Clique le bouton "Run" en haut (green button)
+2. Tu devrais voir dans la console :
+
+   ============================================================
+   🎵 WeMeetMusik Server RUNNING
+   📍 Port: 3000
+   🌐 URL: https://wemeet-mega-upload.replit.dev
+   ============================================================
+
+
+ÉTAPE 6 : Copier l'URL
+─────────────────────────────────────────────────────────────────────────────
+
+1. L'URL ressemble à : https://wemeet-mega-upload.replit.dev
+   (le nom peut être différent selon ce que tu as choisi)
+
+2. Copie cette URL
+
+3. Va dans le fichier megaHelper.js de l'app WeMeetMusik
+
+4. Ajoute au top du fichier :
+
+   const REPLIT_UPLOAD_URL = 'https://TON_URL_ICI';
+
+   Exemple :
+   const REPLIT_UPLOAD_URL = 'https://wemeet-mega-upload.replit.dev';
+
+
+ÉTAPE 7 : Test rapide
+─────────────────────────────────────────────────────────────────────────────
+
+1. Ouvre l'app WeMeetMusik dans le navigateur
+2. Ouvre la Console (F12)
+3. Tape ceci :
+
+   const formData = new FormData();
+   formData.append('file', new File(['test'], 'test.txt'));
+   formData.append('userName', 'Denis');
+
+   fetch('https://TON_URL_REPLIT/upload', {
+       method: 'POST',
+       body: formData
+   })
+   .then(r => r.json())
+   .then(data => console.log('✅ SUCCESS:', data))
+   .catch(e => console.error('❌ ERROR:', e));
+
+4. Tu devrais voir dans la console :
+   ✅ SUCCESS: { success: true, message: "test.txt uploadé..." }
+
+
+C'EST BON ! 🎉
+─────────────────────────────────────────────────────────────────────────────
+
+Le serveur Replit est maintenant en ligne et prêt à uploader sur Mega.
+
+Quand quelqu'un clique "Télécharger" dans l'app :
+1. Le fichier est envoyé à Replit
+2. Replit l'upload sur Mega
+3. L'app reçoit la confirmation
+4. Le groupe voit l'activité
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                            ⚠️ IMPORTANT
+═══════════════════════════════════════════════════════════════════════════════
+
+Replit GRATUIT s'endort après 1h d'inactivité.
+
+Solution : Ajoute ceci dans megaHelper.js pour "réveiller" le serveur :
+
+   // Réveiller le serveur Replit toutes les 5 min
+   setInterval(async () => {
+       try {
+           await fetch(REPLIT_UPLOAD_URL);
+       } catch (e) {
+           // silencieux
+       }
+   }, 5 * 60 * 1000);
+
+
+═══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,179 @@
+═══════════════════════════════════════════════════════════════════════════════
+                        INTÉGRATION MEGA - GUIDE COMPLET
+═══════════════════════════════════════════════════════════════════════════════
+
+MEGA est maintenant intégré ! Voici comment ça marche :
+
+✅ Fichiers créés :
+  - megaConfig.js : Identifiants (email + password)
+  - megaHelper.js : Fonctions upload/download/list/delete
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                        COMMENT ÇA FONCTIONNE
+═══════════════════════════════════════════════════════════════════════════════
+
+1️⃣  STRUCTURE MEGA
+─────────────────────────────────────────────────────────────────────────────
+
+Compte Mega :
+  soaresden+wemeet@gmail.com
+
+Dossiers créés automatiquement :
+  /Denis
+  /Li
+  /Sophie
+  /Marc
+
+(Un dossier par utilisateur)
+
+
+2️⃣  FLUX D'UPLOAD (quand quelqu'un télécharge une partition)
+─────────────────────────────────────────────────────────────────────────────
+
+1. Utilisateur clique "Télécharger" sur LibreScore
+2. ui.js appelle MegaHelper.uploadFile()
+3. megaHelper.js :
+   - Se connecte à MEGA
+   - Crée le dossier utilisateur (si n'existe pas)
+   - Upload le fichier dedans
+4. userData.js log l'action
+5. Tout le groupe voit dans l'activité : "Denis a téléchargé Bohemian"
+
+
+3️⃣  FLUX DE DOWNLOAD (quand quelqu'un veut récupérer une partition)
+─────────────────────────────────────────────────────────────────────────────
+
+1. Utilisateur clique sur une partition dans la liste
+2. ui.js appelle MegaHelper.downloadFile()
+3. megaHelper.js :
+   - Se connecte à MEGA
+   - Trouve le fichier
+   - Le télécharge dans le navigateur
+4. Utilisateur peut écouter / lire la partition
+
+
+4️⃣  FLUX DE SUPPRESSION
+─────────────────────────────────────────────────────────────────────────────
+
+1. Utilisateur clique "🗑️ Supprimer"
+2. ui.js appelle MegaHelper.deleteFile()
+3. megaHelper.js supprime le fichier de MEGA
+4. Supabase met à jour la base de données
+5. Tout le groupe voit : "Denis a supprimé Bohemian"
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                        FONCTIONS DISPONIBLES
+═══════════════════════════════════════════════════════════════════════════════
+
+MegaHelper.init()
+  → Initialise la connexion à MEGA
+  → À appeler au démarrage de l'app
+  → Retour : true/false
+
+MegaHelper.createUserFolder(userName)
+  → Crée un dossier pour l'utilisateur
+  → Exemple : "Denis" → crée dossier "Denis" sur MEGA
+  → Retour : folder object ou null
+
+MegaHelper.uploadFile(file, userId, userName)
+  → Upload un fichier
+  → Exemple : MegaHelper.uploadFile(file, "user_1", "Denis")
+  → Retour : { name, size, megaHandle }
+
+MegaHelper.downloadFile(fileName, userId)
+  → Télécharge un fichier
+  → Retour : données du fichier
+
+MegaHelper.listUserFiles(userName)
+  → Liste tous les fichiers de l'utilisateur
+  → Retour : array de fichiers
+
+MegaHelper.deleteFile(fileName, userName)
+  → Supprime un fichier
+  → Retour : true/false
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                        INTÉGRATION DANS LE CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+À ajouter dans ui.js (dans la fonction downloadPartition) :
+
+downloadPartition(partition) {
+    // ... code existant ...
+
+    // Upload sur MEGA
+    const user = DataManager.getUserById(this.currentUserId);
+    const file = new File([partition.fileName], partition.fileName);
+
+    await MegaHelper.uploadFile(file, this.currentUserId, user.name);
+
+    // Log l'action
+    DataManager.addLog(
+        this.currentUserId,
+        'Télécharge partition',
+        partition.title
+    );
+
+    // Rafraîchir
+    this.renderPartitionsTree();
+    this.updateActivityLog();
+}
+
+
+À ajouter dans ui.js (dans la fonction updateStatusButtons) :
+
+deleteBtn.addEventListener('click', () => {
+    if (confirm('Supprimer cette partition ?')) {
+        const user = DataManager.getUserById(this.currentUserId);
+
+        // Supprimer de MEGA
+        MegaHelper.deleteFile(partition.fileName, user.name);
+
+        // Supprimer de la base
+        DataManager.deletePartition(partitionId);
+        DataManager.addLog(this.currentUserId, 'Supprime', partition.title);
+
+        // Rafraîchir
+        this.renderPartitionsTree();
+    }
+});
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                        ÉTAPES DE SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ megaConfig.js créé avec identifiants
+2. ✅ megaHelper.js créé avec toutes les fonctions
+3. ✅ Scripts chargés dans index.html
+4. 📝 À faire : Intégrer appels MegaHelper dans ui.js
+
+
+PROCHAINES ÉTAPES :
+
+1. Tester que MegaHelper.init() fonctionne (ouvre Console, F12)
+2. Modifier downloadPartition() pour appeler MegaHelper
+3. Modifier deletePartitionBtn pour appeler MegaHelper.deleteFile()
+4. Tester un vrai upload/download
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                        NOTES DE SÉCURITÉ
+═══════════════════════════════════════════════════════════════════════════════
+
+⚠️  Les identifiants MEGA sont en dur dans megaConfig.js
+   → C'est OK puisque c'est un compte "jetable" juste pour les partitions
+   → Si quelqu'un vole le code, ils n'accèdent qu'aux partitions musicales
+
+✅ Les données sensibles de Supabase sont différentes (clés API)
+   → À garder privées
+
+✅ Idéalement en production :
+   → Mettre les identifiants dans des variables d'environnement
+   → Ou les générer sur un backend serveur
+
+
+═══════════════════════════════════════════════════════════════════════════════
