@@ -270,18 +270,127 @@ input[type="text"]:focus {
     z-index: 10;
 }
 
+/* LOADING INDICATOR */
+.loading-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 15px;
+}
+
+.spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 71, 88, 0.2);
+    border-top: 3px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-indicator p {
+    color: #666;
+    font-size: 0.95em;
+}
+
+/* SEARCH BAR */
+.search-bar {
+    margin-bottom: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.search-input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 2px solid var(--primary);
+    border-radius: 6px;
+    font-size: 0.95em;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 71, 88, 0.1);
+}
+
+.search-input::placeholder {
+    color: #999;
+}
+
+/* TABLE HEADERS */
 .partitions-table th {
-    padding: 8px;
+    padding: 6px 8px;
     text-align: left;
     font-weight: 700;
     border-bottom: 2px solid var(--primary);
     white-space: nowrap;
+    background: rgba(255, 71, 88, 0.08);
+    color: #333;
 }
 
+.partitions-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+}
+
+.partitions-table th.sortable:hover {
+    background: rgba(255, 71, 88, 0.05);
+}
+
+.partitions-table th.sortable::after {
+    content: ' ⇅';
+    font-size: 0.8em;
+    opacity: 0.5;
+}
+
+.partitions-table th.sortable.asc::after {
+    content: ' ↑';
+    opacity: 1;
+}
+
+.partitions-table th.sortable.desc::after {
+    content: ' ↓';
+    opacity: 1;
+}
+
+/* COUNTER */
+.counter {
+    margin-left: auto;
+    padding: 8px 15px;
+    background: rgba(255, 71, 88, 0.1);
+    border-radius: 6px;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--primary);
+    white-space: nowrap;
+}
+
+.counter span {
+    font-weight: 700;
+}
+
+/* TABLE ROWS */
 .partitions-table tbody tr {
     border-bottom: 1px solid var(--border-light);
     transition: background 0.2s;
-    height: 32px;
+    height: 5px;
+}
+
+/* Zebra striping */
+.partitions-table tbody tr:nth-child(odd) {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.partitions-table tbody tr:nth-child(even) {
+    background: white;
 }
 
 .partitions-table tbody tr:hover {
@@ -289,21 +398,28 @@ input[type="text"]:focus {
 }
 
 .partitions-table td {
-    padding: 4px 8px;
+    padding: 0px 3px;
     text-align: left;
-    height: 32px;
+    height: 5px;
     vertical-align: middle;
+    font-size: 0.65em;
+    line-height: 1;
+    overflow: hidden;
 }
 
 .status-cell {
     cursor: pointer;
-    padding: 2px 6px;
+    padding: 2px 3px;
     border-radius: 4px;
     background: #f5f5f5;
     text-align: center;
     transition: all 0.2s;
     user-select: none;
-    font-size: 0.9em;
+    font-size: 0.65em;
+    line-height: 1.1;
+    white-space: normal;
+    word-break: break-word;
+    overflow: hidden;
 }
 
 .status-cell:hover {
@@ -314,6 +430,10 @@ input[type="text"]:focus {
     background: var(--primary);
     color: white;
     font-weight: 600;
+}
+
+.status-cell br {
+    display: none;
 }
 
 /* ADD PARTITION BAR */
@@ -1050,7 +1170,7 @@ input[type="text"]:focus {
     }
 
     .partitions-table {
-        font-size: 0.8em;
+        font-size: 0.75em;
     }
 
     .partitions-table th {
@@ -1058,12 +1178,18 @@ input[type="text"]:focus {
     }
 
     .partitions-table td {
-        padding: 2px 4px;
+        padding: 0px 2px;
+        height: 5px;
+        font-size: 0.6em;
     }
 
     .partitions-table tbody tr {
-        height: auto;
-        min-height: 28px;
+        height: 5px;
+    }
+
+    .search-input {
+        font-size: 0.9em;
+        padding: 8px 12px;
     }
 
     /* Cacher colonnes pour mobile: User, Status, Fichier */

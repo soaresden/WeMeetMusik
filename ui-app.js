@@ -52,6 +52,17 @@ const UIApp = {
         document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
         document.getElementById('addPartitionBtn').addEventListener('click', () => this.addPartition());
         document.getElementById('newTitle').addEventListener('input', (e) => this.showSuggestions(e.target.value));
+
+        // Event recherche
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+        }
+
+        // Events tri par header
+        document.querySelectorAll('.partitions-table th.sortable').forEach(th => {
+            th.addEventListener('click', (e) => this.handleSort(e.target.dataset.column));
+        });
     },
 
     /**
@@ -71,6 +82,10 @@ const UIApp = {
      * Charger et afficher la table des partitions
      */
     async loadAndRenderTable(filter = 'all') {
+        // Afficher le loading indicator
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) loadingIndicator.style.display = 'flex';
+
         const partitions = await SupabaseData.getAllPartitions();
         const tbody = document.getElementById('partitionsTableBody');
 
@@ -79,6 +94,13 @@ const UIApp = {
         // Stocker partitions pour le filtrage
         UIApp.allPartitions = partitions;
         UIApp.currentFilter = filter;
+
+        // Trier par date d'ajout décroissante
+        partitions.sort((a, b) => {
+            const dateA = new Date(a.created_at || 0);
+            const dateB = new Date(b.created_at || 0);
+            return dateB - dateA;
+        });
 
         // Filtrer les partitions selon le statut de l'user
         let filteredPartitions = partitions;
@@ -95,6 +117,7 @@ const UIApp = {
 
         for (const partition of filteredPartitions) {
             const tr = document.createElement('tr');
+            tr.setAttribute('data-partition-id', partition.id);
 
             const statuses = await SupabaseData.getPartitionStatuses(partition.id);
             const userStatus = await SupabaseData.getUserPartitionStatus(UI.currentUserId, partition.id);
@@ -102,6 +125,11 @@ const UIApp = {
             const workingCount = statuses.working.length;
             const todoCount = statuses.todo.length;
             const skilledCount = statuses.skilled.length;
+
+            // Affichage des noms pour les statuts
+            const workingNames = statuses.working.map(s => s.users?.name || '?').join(', ');
+            const todoNames = statuses.todo.map(s => s.users?.name || '?').join(', ');
+            const skilledNames = statuses.skilled.map(s => s.users?.name || '?').join(', ');
 
             const nomFichier = partition.nom_fichier || '';
             const uploadBtn = `<button class="btn-upload" data-partition-id="${partition.id}" title="Ajouter fichier MIDI">🎼</button>`;
@@ -114,14 +142,14 @@ const UIApp = {
                 <td>${partition.users?.name || 'Inconnu'}</td>
                 <td>${partition.status}</td>
                 <td>${fichierDisplay}</td>
-                <td class="status-cell ${userStatus === 'working' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'working')">
-                    🐫 ${workingCount}
+                <td class="status-cell ${userStatus === 'working' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'working')" title="${workingNames || 'Personne'}">
+                    🐫 ${workingNames || ''}
                 </td>
-                <td class="status-cell ${userStatus === 'todo' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'todo')">
-                    🤔 ${todoCount}
+                <td class="status-cell ${userStatus === 'todo' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'todo')" title="${todoNames || 'Personne'}">
+                    🤔 ${todoNames || ''}
                 </td>
-                <td class="status-cell ${userStatus === 'skilled' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'skilled')">
-                    ✅ ${skilledCount}
+                <td class="status-cell ${userStatus === 'skilled' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'skilled')" title="${skilledNames || 'Personne'}">
+                    ✅ ${skilledNames || ''}
                 </td>
                 <td style="text-align: center;">
                     <button class="btn-delete-row" data-partition-id="${partition.id}" data-title="${partition.title}" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #999; padding: 0;">✕</button>
@@ -130,6 +158,15 @@ const UIApp = {
 
             tbody.appendChild(tr);
         }
+
+        // Mettre à jour le compteur
+        const counterElement = document.getElementById('partitionsCounter');
+        if (counterElement) {
+            counterElement.textContent = filteredPartitions.length;
+        }
+
+        // Masquer le loading indicator
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
 
         // Ajouter les event listeners pour les inputs de fichier
         document.querySelectorAll('.table-input').forEach(input => {
@@ -296,21 +333,76 @@ const UIApp = {
     },
 
     /**
-     * Définir le statut d'une partition
+     * Définir le statut d'une partition (sans recharger toute la table)
+     * Toggle si même statut, sinon switch direct au nouveau statut
      */
     async setStatus(partitionId, status) {
         try {
             const currentStatus = await SupabaseData.getUserPartitionStatus(UI.currentUserId, partitionId);
 
             if (currentStatus === status) {
+                // Même statut cliqué = désactiver le statut
                 await SupabaseData.removeUserPartitionStatus(UI.currentUserId, partitionId);
+                console.log(`🔄 Status removed for partition ${partitionId}`);
             } else {
+                // Statut différent = forcer directement le nouveau statut
+                // Si un ancien statut existe, il sera remplacé
                 await SupabaseData.setUserPartitionStatus(UI.currentUserId, partitionId, status);
+                console.log(`🔄 Status changed from ${currentStatus} to ${status} for partition ${partitionId}`);
             }
 
-            await this.loadAndRenderTable();
+            // Mettre à jour uniquement la ligne concernée
+            await this.updateStatusCells(partitionId);
         } catch (error) {
             console.error('❌ Error setting status:', error);
+        }
+    },
+
+    /**
+     * Mettre à jour uniquement les cellules de status pour une partition
+     */
+    async updateStatusCells(partitionId) {
+        try {
+            const statuses = await SupabaseData.getPartitionStatuses(partitionId);
+            const userStatus = await SupabaseData.getUserPartitionStatus(UI.currentUserId, partitionId);
+
+            const workingCount = statuses.working.length;
+            const todoCount = statuses.todo.length;
+            const skilledCount = statuses.skilled.length;
+
+            // Affichage des noms pour les statuts
+            const workingNames = statuses.working.map(s => s.users?.name || '?').join(', ');
+            const todoNames = statuses.todo.map(s => s.users?.name || '?').join(', ');
+            const skilledNames = statuses.skilled.map(s => s.users?.name || '?').join(', ');
+
+            // Trouver la ligne dans la table
+            const row = document.querySelector(`tr[data-partition-id="${partitionId}"]`);
+            if (!row) return;
+
+            // Mettre à jour les cellules de status
+            const cells = row.querySelectorAll('.status-cell');
+
+            if (cells[0]) {
+                cells[0].className = `status-cell ${userStatus === 'working' ? 'active' : ''}`;
+                cells[0].innerHTML = `🐫 ${workingNames || ''}`;
+                cells[0].title = workingNames || 'Personne';
+            }
+
+            if (cells[1]) {
+                cells[1].className = `status-cell ${userStatus === 'todo' ? 'active' : ''}`;
+                cells[1].innerHTML = `🤔 ${todoNames || ''}`;
+                cells[1].title = todoNames || 'Personne';
+            }
+
+            if (cells[2]) {
+                cells[2].className = `status-cell ${userStatus === 'skilled' ? 'active' : ''}`;
+                cells[2].innerHTML = `✅ ${skilledNames || ''}`;
+                cells[2].title = skilledNames || 'Personne';
+            }
+
+            console.log(`✅ Statuts mis à jour pour partition ${partitionId}`);
+        } catch (error) {
+            console.error('❌ Error updating status cells:', error);
         }
     },
 
@@ -659,6 +751,74 @@ const UIApp = {
         UI.currentUserEmoji = null;
         UI.currentUserColorPrimary = null;
         UI.currentUserColorSecondary = null;
+    },
+
+    /**
+     * Recherche dans la table
+     */
+    handleSearch(searchTerm) {
+        const rows = document.querySelectorAll('#partitionsTableBody tr');
+        const term = searchTerm.toLowerCase();
+
+        rows.forEach(row => {
+            const title = row.querySelector('td:nth-child(1)')?.textContent.toLowerCase() || '';
+            const artist = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
+            const user = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
+
+            const matches = title.includes(term) || artist.includes(term) || user.includes(term);
+            row.style.display = matches ? '' : 'none';
+        });
+
+        console.log(`🔍 Recherche: "${searchTerm}"`);
+    },
+
+    /**
+     * Tri des colonnes
+     */
+    handleSort(columnName) {
+        const table = document.getElementById('partitionsTable');
+        const tbody = document.getElementById('partitionsTableBody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        // Déterminer l'index de la colonne
+        let columnIndex = 0;
+        if (columnName === 'title') columnIndex = 0;
+        else if (columnName === 'artist') columnIndex = 1;
+        else if (columnName === 'user') columnIndex = 2;
+        else if (columnName === 'status') columnIndex = 3;
+
+        // Déterminer la direction du tri
+        const header = document.querySelector(`th[data-column="${columnName}"]`);
+        let isAsc = !header.classList.contains('asc');
+
+        // Réinitialiser tous les headers
+        document.querySelectorAll('.partitions-table th.sortable').forEach(th => {
+            th.classList.remove('asc', 'desc');
+        });
+
+        // Trier les lignes
+        rows.sort((a, b) => {
+            const textA = a.querySelector(`td:nth-child(${columnIndex + 1})`)?.textContent.trim() || '';
+            const textB = b.querySelector(`td:nth-child(${columnIndex + 1})`)?.textContent.trim() || '';
+
+            if (isAsc) {
+                return textA.localeCompare(textB, 'fr');
+            } else {
+                return textB.localeCompare(textA, 'fr');
+            }
+        });
+
+        // Appliquer le tri dans le DOM
+        rows.forEach(row => tbody.appendChild(row));
+
+        // Marquer le header avec la direction
+        if (isAsc) {
+            header.classList.add('asc');
+        } else {
+            header.classList.add('desc');
+        }
+
+        console.log(`📊 Tri: ${columnName} ${isAsc ? '↑' : '↓'}`);
     }
 };
 

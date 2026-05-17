@@ -126,18 +126,30 @@
             <button class="tab-btn" data-filter="working">🐫 En train de bosser</button>
             <button class="tab-btn" data-filter="todo">🤔 Ma Todo</button>
             <button class="tab-btn" data-filter="skilled">✅ Maîtrisés</button>
+            <div class="counter">📚 <span id="partitionsCounter">0</span> morceaux</div>
         </div>
 
         <div class="app-container">
+            <!-- BARRE DE RECHERCHE -->
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="🔍 Chercher titre, artiste, user..." class="search-input">
+            </div>
+
+            <!-- LOADING INDICATOR -->
+            <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <p>Chargement des morceaux...</p>
+            </div>
+
             <!-- TABLE SIMPLE -->
             <div class="table-zone">
                 <table class="partitions-table" id="partitionsTable">
                     <thead>
                         <tr>
-                            <th>Titre</th>
-                            <th>Artiste</th>
-                            <th>User</th>
-                            <th>Status</th>
+                            <th class="sortable" data-column="title">Titre</th>
+                            <th class="sortable" data-column="artist">Artiste</th>
+                            <th class="sortable" data-column="user">User</th>
+                            <th class="sortable" data-column="status">Status</th>
                             <th>📄 Fichier</th>
                             <th>🐫</th>
                             <th>🤔</th>

@@ -159,7 +159,7 @@ const SupabaseData = {
         try {
             const { data, error } = await supabase
                 .from('user_partition_statuses')
-                .select('status')
+                .select('*')
                 .eq('user_id', userId)
                 .eq('partition_id', partitionId)
                 .single();
