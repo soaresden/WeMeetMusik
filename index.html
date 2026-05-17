@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/dist/umd/supabase.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/midi-parser-js@3.5.0/src/midi-parser.js"></script>
-    <script src="https://cdns-files.deezer.com/js/min/dz.js"></script>
 </head>
 <body>
     <!-- Page de Login -->
@@ -120,13 +119,26 @@
             </div>
         </div>
 
+        <!-- OVERLAY DE CHARGEMENT -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-spinner-container">
+                <div class="spinner"></div>
+                <p id="loadingProgress">Chargement...</p>
+                <p id="loadingTitle" style="margin-top: 15px; font-size: 0.95em; color: #666;"></p>
+            </div>
+        </div>
+
         <!-- ONGLETS DE FILTRAGE -->
         <div class="tabs-container">
             <button class="tab-btn active" data-filter="all">📋 Liste complète</button>
-            <button class="tab-btn" data-filter="working">🐫 En train de bosser</button>
             <button class="tab-btn" data-filter="todo">🤔 Ma Todo</button>
+            <button class="tab-btn" data-filter="working">🐫 En train de bosser</button>
             <button class="tab-btn" data-filter="skilled">✅ Maîtrisés</button>
-            <div class="counter">📚 <span id="partitionsCounter">0</span> morceaux</div>
+            <div class="counter">
+                📚 <span id="partitionsCounter">0</span> morceaux
+                <div id="statsChart" style="display: inline-flex; gap: 2px; margin-left: 20px; height: 24px; align-items: center;"></div>
+            </div>
+            <button id="refreshBtn" class="btn-secondary" style="margin-left: auto; padding: 6px 12px; font-size: 0.9em;">🔄 Rafraîchir</button>
         </div>
 
         <div class="app-container">
@@ -146,13 +158,14 @@
                 <table class="partitions-table" id="partitionsTable">
                     <thead>
                         <tr>
+                            <th class="sortable" data-column="user">User</th>
                             <th class="sortable" data-column="title">Titre</th>
                             <th class="sortable" data-column="artist">Artiste</th>
-                            <th class="sortable" data-column="user">User</th>
                             <th class="sortable" data-column="status">Status</th>
+                            <th class="sortable" data-column="modified">Modifié le</th>
                             <th>📄 Fichier</th>
-                            <th>🐫</th>
                             <th>🤔</th>
+                            <th>🐫</th>
                             <th>✅</th>
                             <th style="width: 40px;"></th>
                         </tr>

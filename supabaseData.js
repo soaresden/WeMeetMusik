@@ -11,7 +11,7 @@ const SupabaseData = {
         try {
             const { data, error } = await supabase
                 .from('partitions')
-                .select('*, users(name)')
+                .select('*, users(name, emoji, color_primary)')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -93,19 +93,25 @@ const SupabaseData = {
      */
     async setUserPartitionStatus(userId, partitionId, status) {
         try {
+            // D'abord, supprimer l'ancien status s'il existe
+            await supabase
+                .from('user_partition_statuses')
+                .delete()
+                .eq('user_id', userId)
+                .eq('partition_id', partitionId);
+
+            // Puis insérer le nouveau status
             const { data, error } = await supabase
                 .from('user_partition_statuses')
-                .upsert([{
+                .insert([{
                     user_id: userId,
                     partition_id: partitionId,
                     status
                 }]);
 
             if (error) throw error;
-            console.log(`✅ User status set: ${status}`);
             return data;
         } catch (error) {
-            console.error('❌ Error setting user status:', error);
             throw error;
         }
     },
@@ -159,15 +165,20 @@ const SupabaseData = {
         try {
             const { data, error } = await supabase
                 .from('user_partition_statuses')
-                .select('*')
+                .select('status')
                 .eq('user_id', userId)
                 .eq('partition_id', partitionId)
-                .single();
+                .limit(1);
 
-            if (error?.code === 'PGRST116') return null; // Pas trouvé
-            if (error) throw error;
+            if (error) {
+                console.warn('⚠️ Query warning:', error.message);
+                return null;
+            }
 
-            return data?.status || null;
+            // Si aucune donnée, retourner null
+            if (!data || data.length === 0) return null;
+
+            return data[0]?.status || null;
         } catch (error) {
             console.error('❌ Error fetching user status:', error);
             return null;

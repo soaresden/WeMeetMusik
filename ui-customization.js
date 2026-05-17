@@ -330,8 +330,6 @@ const UICustomization = {
 
             // Petit délai pour assurer le rendu
             await new Promise(r => setTimeout(r, 100));
-
-            console.log('✅ App ready!');
         } catch (error) {
             alert('Erreur: ' + error.message);
         }

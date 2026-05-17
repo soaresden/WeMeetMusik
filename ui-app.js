@@ -3,11 +3,15 @@
  */
 
 const UIApp = {
+    // Cache des partitions pour éviter de recharger à chaque changement d'onglet
+    partitionsCache: null,
+    userStatusesCache: null,  // Cache des statuts de l'utilisateur
+    currentFilter: 'all',
+
     /**
      * Entrer dans l'app
      */
     async enter() {
-        console.log('📱 Entering app...');
 
         this.applyUserColors();
 
@@ -21,37 +25,31 @@ const UIApp = {
         document.getElementById('userInstruments').textContent = instruments.length > 0
             ? userEmoji + ' ' + instruments.join(', ')
             : '';
-        console.log(`🎸 Instruments displayed: ${userEmoji} ${instruments.join(', ')}`);
 
         // Charger la table
         await this.loadAndRenderTable();
 
-        // Restaurer l'état de lecture depuis le cache navigateur
-        const cachedPlayback = localStorage.getItem('currentPlayingPartition');
-        if (cachedPlayback) {
-            try {
-                const playbackInfo = JSON.parse(cachedPlayback);
-                console.log(`🎵 État de lecture en cache trouvé:`, playbackInfo);
-                // Note: le bouton sera marqué comme 'playing' mais la lecture ne reprendra pas
-                // L'utilisateur devra cliquer de nouveau pour continuer
-            } catch (e) {
-                console.warn('⚠️ Impossible de restaurer l\'état de lecture:', e);
-            }
-        }
+        // Cache de lecture supprimé - pas de logs inutiles
 
-        // Events tabs
+        // Events tabs - filtre rapide!
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                await this.loadAndRenderTable(e.target.dataset.filter);
+                this.quickFilter(e.target.dataset.filter);  // Filtre super rapide!
             });
         });
 
         // Events
         document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
         document.getElementById('addPartitionBtn').addEventListener('click', () => this.addPartition());
-        document.getElementById('newTitle').addEventListener('input', (e) => this.showSuggestions(e.target.value));
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            this.partitionsCache = null; // Vider le cache
+            this.userStatusesCache = null; // Vider le cache des statuts
+            this.loadAndRenderTable(this.currentFilter);
+        });
+        document.getElementById('newTitle').addEventListener('input', (e) => this.filterPartitions());
+        document.getElementById('newArtist').addEventListener('input', (e) => this.filterPartitions());
 
         // Event recherche
         const searchInput = document.getElementById('searchInput');
@@ -62,6 +60,88 @@ const UIApp = {
         // Events tri par header
         document.querySelectorAll('.partitions-table th.sortable').forEach(th => {
             th.addEventListener('click', (e) => this.handleSort(e.target.dataset.column));
+        });
+
+        // Implémenter le redimensionnement des colonnes
+        this.initColumnResize();
+    },
+
+    /**
+     * Initialiser le redimensionnement des colonnes
+     */
+    initColumnResize() {
+        const table = document.getElementById('partitionsTable');
+        const thead = table.querySelector('thead');
+        const ths = Array.from(thead.querySelectorAll('th'));
+
+        ths.forEach((th, index) => {
+            // Créer un séparateur redimensionnable
+            const resizer = document.createElement('div');
+            resizer.className = 'column-resizer';
+            resizer.style.cssText = `
+                position: absolute;
+                top: 0;
+                right: -5px;
+                width: 10px;
+                height: 100%;
+                cursor: col-resize;
+                user-select: none;
+            `;
+
+            th.style.position = 'relative';
+            th.style.userSelect = 'none';
+            th.appendChild(resizer);
+
+            const handleResizeStart = (startX) => {
+                const startWidth = th.offsetWidth;
+
+                const onMove = (clientX) => {
+                    const diff = clientX - startX;
+                    const newWidth = Math.max(50, startWidth + diff);
+                    th.style.width = newWidth + 'px';
+                    th.style.minWidth = newWidth + 'px';
+                    th.style.maxWidth = newWidth + 'px';
+
+                    // Aussi mettre à jour les colonnes correspondantes dans le tbody
+                    const tbody = table.querySelector('tbody');
+                    const trs = tbody.querySelectorAll('tr');
+                    trs.forEach(tr => {
+                        const tds = Array.from(tr.querySelectorAll('td'));
+                        if (tds[index]) {
+                            tds[index].style.width = newWidth + 'px';
+                            tds[index].style.minWidth = newWidth + 'px';
+                            tds[index].style.maxWidth = newWidth + 'px';
+                        }
+                    });
+                };
+
+                const onEnd = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    document.removeEventListener('touchmove', onTouchMove);
+                    document.removeEventListener('touchend', onTouchEnd);
+                };
+
+                const onMouseMove = (e) => onMove(e.clientX);
+                const onMouseUp = () => onEnd();
+                const onTouchMove = (e) => onMove(e.touches[0].clientX);
+                const onTouchEnd = () => onEnd();
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+                document.addEventListener('touchend', onTouchEnd);
+            };
+
+            resizer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                handleResizeStart(e.clientX);
+            });
+
+            resizer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handleResizeStart(e.touches[0].clientX);
+            });
         });
     },
 
@@ -75,18 +155,34 @@ const UIApp = {
         document.documentElement.style.setProperty('--primary', colorPrimary);
         document.documentElement.style.setProperty('--bg-light', colorSecondary);
 
-        console.log(`🎨 Applied colors: primary=${colorPrimary}, secondary=${colorSecondary}`);
     },
 
     /**
      * Charger et afficher la table des partitions
+     * Utilise un cache pour éviter de recharger à chaque changement d'onglet
      */
     async loadAndRenderTable(filter = 'all') {
-        // Afficher le loading indicator
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        if (loadingIndicator) loadingIndicator.style.display = 'flex';
+        // Afficher l'overlay de chargement
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingProgress = document.getElementById('loadingProgress');
+        const loadingTitle = document.getElementById('loadingTitle');
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('active');
+            if (loadingProgress) loadingProgress.textContent = 'Chargement des données...';
+            if (loadingTitle) loadingTitle.textContent = '';
+        }
 
-        const partitions = await SupabaseData.getAllPartitions();
+        // Afficher un indicateur de chargement
+        document.title = 'WeMeetMusik - Chargement...';
+
+        // Charger depuis le cache ou récupérer de Supabase
+        let partitions;
+        if (!this.partitionsCache) {
+            partitions = await SupabaseData.getAllPartitions();
+            this.partitionsCache = partitions;
+        } else {
+            partitions = this.partitionsCache;
+        }
         const tbody = document.getElementById('partitionsTableBody');
 
         tbody.innerHTML = '';
@@ -95,58 +191,138 @@ const UIApp = {
         UIApp.allPartitions = partitions;
         UIApp.currentFilter = filter;
 
-        // Trier par date d'ajout décroissante
+        // Enrichir les partitions avec la date de dernière modification
+        for (const partition of partitions) {
+            const statuses = await SupabaseData.getPartitionStatuses(partition.id);
+            const allStatuses = [...statuses.working, ...statuses.todo, ...statuses.skilled];
+
+            if (allStatuses.length > 0) {
+                try {
+                    const dates = allStatuses
+                        .map(s => s.updated_at ? new Date(s.updated_at) : null)
+                        .filter(d => d && !isNaN(d));
+                    if (dates.length > 0) {
+                        partition.lastModifiedDate = new Date(Math.max(...dates));
+                    } else {
+                        partition.lastModifiedDate = new Date(partition.created_at || 0);
+                    }
+                } catch (e) {
+                    partition.lastModifiedDate = new Date(partition.created_at || 0);
+                }
+            } else {
+                partition.lastModifiedDate = new Date(partition.created_at || 0);
+            }
+        }
+
+        // Trier par date de dernière modification décroissante (par défaut)
         partitions.sort((a, b) => {
-            const dateA = new Date(a.created_at || 0);
-            const dateB = new Date(b.created_at || 0);
+            const dateA = a.lastModifiedDate || new Date(a.created_at || 0);
+            const dateB = b.lastModifiedDate || new Date(b.created_at || 0);
             return dateB - dateA;
         });
+
+        // Charger les statuts de l'utilisateur (une seule fois, puis en cache)
+        if (!this.userStatusesCache) {
+            this.userStatusesCache = {};
+            const { data: statuses, error } = await supabase
+                .from('user_partition_statuses')
+                .select('partition_id, status')
+                .eq('user_id', UI.currentUserId);
+
+            if (!error && statuses) {
+                statuses.forEach(s => {
+                    this.userStatusesCache[s.partition_id] = s.status;
+                });
+            }
+        }
+
+        // Calculer les stats GLOBALES (tous les morceaux)
+        let globalTodoCount = 0, globalWorkingCount = 0, globalSkilledCount = 0;
+        partitions.forEach(p => {
+            const status = this.userStatusesCache?.[p.id];
+            if (status === 'todo') globalTodoCount++;
+            else if (status === 'working') globalWorkingCount++;
+            else if (status === 'skilled') globalSkilledCount++;
+        });
+        this.globalStats = { todo: globalTodoCount, working: globalWorkingCount, skilled: globalSkilledCount };
 
         // Filtrer les partitions selon le statut de l'user
         let filteredPartitions = partitions;
 
         if (filter !== 'all') {
-            filteredPartitions = [];
-            for (const partition of partitions) {
-                const userStatus = await SupabaseData.getUserPartitionStatus(UI.currentUserId, partition.id);
-                if (userStatus === filter) {
-                    filteredPartitions.push(partition);
-                }
-            }
+            filteredPartitions = partitions.filter(partition =>
+                this.userStatusesCache[partition.id] === filter
+            );
         }
 
-        for (const partition of filteredPartitions) {
+        for (let i = 0; i < filteredPartitions.length; i++) {
+            const partition = filteredPartitions[i];
+
+            // Mettre à jour la progression et le titre en cours
+            const loadingProgress = document.getElementById('loadingProgress');
+            const loadingTitle = document.getElementById('loadingTitle');
+            if (loadingProgress) {
+                loadingProgress.textContent = `Chargement: ${i + 1}/${filteredPartitions.length}`;
+            }
+            if (loadingTitle) {
+                loadingTitle.textContent = `${partition.artist} - ${partition.title}`;
+            }
+
             const tr = document.createElement('tr');
             tr.setAttribute('data-partition-id', partition.id);
 
             const statuses = await SupabaseData.getPartitionStatuses(partition.id);
             const userStatus = await SupabaseData.getUserPartitionStatus(UI.currentUserId, partition.id);
 
+
             const workingCount = statuses.working.length;
             const todoCount = statuses.todo.length;
             const skilledCount = statuses.skilled.length;
 
-            // Affichage des noms pour les statuts
+            // Affichage des noms pour le tooltip
             const workingNames = statuses.working.map(s => s.users?.name || '?').join(', ');
             const todoNames = statuses.todo.map(s => s.users?.name || '?').join(', ');
             const skilledNames = statuses.skilled.map(s => s.users?.name || '?').join(', ');
 
+            // Trouver la date de dernière modification
+            const allStatuses = [...statuses.working, ...statuses.todo, ...statuses.skilled];
+            let lastModified = '';
+            if (allStatuses.length > 0) {
+                try {
+                    const dates = allStatuses
+                        .map(s => s.updated_at ? new Date(s.updated_at) : null)
+                        .filter(d => d && !isNaN(d));
+                    if (dates.length > 0) {
+                        const maxDate = new Date(Math.max(...dates));
+                        lastModified = maxDate.toISOString().replace('T', ' ').substring(0, 19);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Could not parse updated_at dates:', e);
+                    lastModified = '';
+                }
+            }
+
             const nomFichier = partition.nom_fichier || '';
-            const uploadBtn = `<button class="btn-upload" data-partition-id="${partition.id}" title="Ajouter fichier MIDI">🎼</button>`;
-            const youtubeLink = `<a href="#" class="btn-youtube" data-title="${partition.title}" data-artist="${partition.artist}" style="color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer;">Youtube</a>`;
+            const uploadBtn = `<button class="btn-upload" data-partition-id="${partition.id}" title="Ouvrir la Partition">🎼</button>`;
+            const youtubeLink = `<a href="#" class="btn-youtube" data-partition-id="${partition.id}" style="color: var(--primary); text-decoration: none; font-weight: 600; cursor: pointer;">Youtube</a>`;
             const fichierDisplay = `<div style="display: flex; gap: 6px; align-items: center; justify-content: flex-start;">${youtubeLink} ${uploadBtn} <input type="text" value="${nomFichier}" class="table-input" data-partition-id="${partition.id}" data-field="nom_fichier" placeholder="..." style="flex: 1; max-width: 100px;"></div>`;
 
+            const userEmoji = partition.users?.emoji || '🎵';
+            const userColor = partition.users?.color_primary || '#666';
+            const userName = partition.users?.name || 'Inconnu';
+
             tr.innerHTML = `
+                <td style="color: ${userColor}; font-weight: 600;">${userEmoji} ${userName}</td>
                 <td><strong>${partition.title}</strong></td>
                 <td>${partition.artist}</td>
-                <td>${partition.users?.name || 'Inconnu'}</td>
                 <td>${partition.status}</td>
+                <td style="font-size: 0.85em; color: #666;">${lastModified}</td>
                 <td>${fichierDisplay}</td>
-                <td class="status-cell ${userStatus === 'working' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'working')" title="${workingNames || 'Personne'}">
-                    🐫 ${workingNames || ''}
-                </td>
                 <td class="status-cell ${userStatus === 'todo' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'todo')" title="${todoNames || 'Personne'}">
                     🤔 ${todoNames || ''}
+                </td>
+                <td class="status-cell ${userStatus === 'working' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'working')" title="${workingNames || 'Personne'}">
+                    🐫 ${workingNames || ''}
                 </td>
                 <td class="status-cell ${userStatus === 'skilled' ? 'active' : ''}" onclick="UIApp.setStatus(${partition.id}, 'skilled')" title="${skilledNames || 'Personne'}">
                     ✅ ${skilledNames || ''}
@@ -159,14 +335,19 @@ const UIApp = {
             tbody.appendChild(tr);
         }
 
-        // Mettre à jour le compteur
+        // Mettre à jour le compteur et les stats GLOBALES (pas filtrées)
         const counterElement = document.getElementById('partitionsCounter');
         if (counterElement) {
             counterElement.textContent = filteredPartitions.length;
         }
 
-        // Masquer le loading indicator
-        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        // Afficher les stats GLOBALES peu importe le filtre actuel
+        this.updateStats(filteredPartitions.length, this.globalStats.todo, this.globalStats.working, this.globalStats.skilled);
+
+        // Cacher l'overlay de chargement
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('active');
+        }
 
         // Ajouter les event listeners pour les inputs de fichier
         document.querySelectorAll('.table-input').forEach(input => {
@@ -174,12 +355,25 @@ const UIApp = {
                 const partitionId = e.target.dataset.partitionId;
                 const field = e.target.dataset.field;
                 const value = e.target.value;
+                const oldValue = e.target.dataset.oldValue || '(empty)';
 
                 if (value) {
                     try {
                         await SupabaseData.updatePartitionField(partitionId, field, value);
-                        console.log(`✅ ${field} saved for partition ${partitionId}`);
+
+                        // Vérifier que Supabase a bien reçu le changement
+                        const { data, error } = await supabase
+                            .from('partitions')
+                            .select(field)
+                            .eq('id', partitionId)
+                            .single();
+
+                        if (error) {
+                            console.error('❌ [VÉRIFICATION] Erreur lors de la vérification:', error);
+                        } else {
+                            }
                     } catch (error) {
+                        console.error(`❌ [ERREUR] ${error.message}`);
                         alert(`Erreur: ${error.message}`);
                     }
                 }
@@ -197,22 +391,36 @@ const UIApp = {
         document.querySelectorAll('.btn-upload').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const partitionId = e.target.dataset.partitionId;
-                console.log(`📤 Upload MIDI for partition ${partitionId}`);
-                alert('Feature upload MIDI - À venir!');
+                console.log(`📤 Partition viewer for partition ${partitionId}`);
+                alert('Feature viewer de partition à venir!');
             });
         });
 
-        // Event listeners pour les liens Youtube
+        // Event listeners pour les liens Youtube (dynamique - récupère titre/artiste du DOM)
         document.querySelectorAll('.btn-youtube').forEach(link => {
             link.addEventListener('click', async (e) => {
                 e.preventDefault();
-                const title = e.target.dataset.title;
-                const artist = e.target.dataset.artist;
 
-                const query = `${title} ${artist}`;
+                // Récupérer la ligne contenant le lien
+                const row = e.target.closest('tr');
+                if (!row) return;
+
+                // Récupérer titre et artiste depuis le DOM
+                // Nouvel ordre: User / Titre / Artiste / Status / Modifié le / Fichier / 🤔 / 🐫 / ✅
+                const titleCell = row.querySelector('td:nth-child(2)');
+                const artistCell = row.querySelector('td:nth-child(3)');
+
+                const title = titleCell ? titleCell.textContent.trim() : '';
+                const artist = artistCell ? artistCell.textContent.trim() : '';
+
+                if (!title || title === '') {
+                    alert('Titre manquant');
+                    return;
+                }
+
+                const query = `${title} ${artist}`.trim();
                 const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 
-                console.log(`🔍 Ouverture YouTube: "${query}"`);
                 window.open(youtubeSearchUrl, '_blank', 'width=1200,height=800');
             });
         });
@@ -241,8 +449,12 @@ const UIApp = {
 
         // Double-click pour éditer les cellules
         document.querySelectorAll('td').forEach(cell => {
-            cell.addEventListener('dblclick', function(e) {
+            cell.addEventListener('dblclick', async function(e) {
                 if (e.target.tagName === 'STRONG' || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+
+                const row = this.closest('tr');
+                const partitionId = row.dataset.partitionId;
+                const columnIndex = Array.from(this.parentNode.children).indexOf(this);
 
                 const text = this.innerText;
                 const input = document.createElement('input');
@@ -260,9 +472,45 @@ const UIApp = {
                 input.select();
 
                 const save = async () => {
-                    const newValue = input.value;
-                    this.innerText = newValue || text;
-                    console.log(`📝 Cell edited: ${text} → ${newValue}`);
+                    const newValue = input.value.trim();
+                    if (newValue === text) {
+                        // Restaurer le format si c'est le titre
+                        if (columnIndex === 1) {
+                            this.innerHTML = `<strong>${text}</strong>`;
+                        } else {
+                            this.innerText = text;
+                        }
+                        return;
+                    }
+
+                    // Restaurer le format approprié
+                    if (columnIndex === 1) {
+                        this.innerHTML = `<strong>${newValue || text}</strong>`;
+                    } else {
+                        this.innerText = newValue || text;
+                    }
+
+                    try {
+                        // Déterminer le champ à mettre à jour selon la colonne
+                        let fieldToUpdate = null;
+                        if (columnIndex === 1) fieldToUpdate = 'title'; // Titre
+                        else if (columnIndex === 2) fieldToUpdate = 'artist'; // Artiste
+                        else if (columnIndex === 5) fieldToUpdate = 'file_url'; // Fichier
+
+                        if (fieldToUpdate && newValue !== text) {
+                            await SupabaseData.updatePartitionField(partitionId, fieldToUpdate, newValue);
+
+                            // Mettre à jour "Modifié le" avec la date/heure actuelle (affichage local)
+                            const now = new Date().toLocaleString('fr-FR');
+                            const modifiedCell = row.querySelector(`td:nth-child(5)`);
+                            if (modifiedCell) {
+                                modifiedCell.innerText = now;
+                            }
+                        }
+                    } catch (error) {
+                        alert(`Erreur: ${error.message}`);
+                        this.innerText = text;
+                    }
                 };
 
                 input.addEventListener('blur', save);
@@ -287,13 +535,30 @@ const UIApp = {
                 // Bouton confirmer
                 document.getElementById('deleteConfirmBtn').onclick = async () => {
                     try {
-                        await SupabaseData.deletePartition(partitionId);
+                        // Enlever la ligne du DOM immédiatement
+                        const row = document.querySelector(`tr[data-partition-id="${partitionId}"]`);
+                        if (row) {
+                            row.remove();
+                                }
+
                         overlay.classList.remove('active');
-                        console.log(`🗑️ Partition deleted: ${title}`);
-                        await UIApp.loadAndRenderTable(UIApp.currentFilter || 'all');
+
+                        // Supprimer sur Supabase en arrière-plan
+                        await SupabaseData.deletePartition(partitionId);
+
+                        // Invalider le cache après suppression
+                        UIApp.partitionsCache = null;
+
+                        // Mettre à jour le compteur
+                        const counterElement = document.getElementById('partitionsCounter');
+                        if (counterElement) {
+                            counterElement.textContent = Math.max(0, parseInt(counterElement.textContent) - 1);
+                        }
                     } catch (error) {
                         alert(`Erreur: ${error.message}`);
                         overlay.classList.remove('active');
+                        // Si erreur, recharger pour être en sync avec Supabase
+                        await UIApp.loadAndRenderTable(UIApp.currentFilter || 'all');
                     }
                 };
 
@@ -304,7 +569,8 @@ const UIApp = {
             });
         });
 
-        console.log(`✅ Table rendered with ${partitions.length} partitions`);
+        // Chargement terminé - mettre à jour le titre
+        document.title = 'WeMeetMusik';
     },
 
     /**
@@ -326,7 +592,9 @@ const UIApp = {
             document.getElementById('newArtist').value = '';
             document.getElementById('suggestions').innerHTML = '';
 
-            await this.loadAndRenderTable();
+            // Invalider le cache après ajout
+            this.partitionsCache = null;
+            await this.loadAndRenderTable(this.currentFilter);
         } catch (error) {
             alert('Erreur: ' + error.message);
         }
@@ -343,18 +611,23 @@ const UIApp = {
             if (currentStatus === status) {
                 // Même statut cliqué = désactiver le statut
                 await SupabaseData.removeUserPartitionStatus(UI.currentUserId, partitionId);
-                console.log(`🔄 Status removed for partition ${partitionId}`);
             } else {
                 // Statut différent = forcer directement le nouveau statut
                 // Si un ancien statut existe, il sera remplacé
                 await SupabaseData.setUserPartitionStatus(UI.currentUserId, partitionId, status);
-                console.log(`🔄 Status changed from ${currentStatus} to ${status} for partition ${partitionId}`);
+            }
+
+            // Mettre à jour le cache des statuts après changement (au lieu de l'invalider)
+            const newStatus = currentStatus === status ? null : status;
+            if (newStatus) {
+                this.userStatusesCache[partitionId] = newStatus;
+            } else {
+                delete this.userStatusesCache[partitionId];
             }
 
             // Mettre à jour uniquement la ligne concernée
             await this.updateStatusCells(partitionId);
         } catch (error) {
-            console.error('❌ Error setting status:', error);
         }
     },
 
@@ -370,7 +643,7 @@ const UIApp = {
             const todoCount = statuses.todo.length;
             const skilledCount = statuses.skilled.length;
 
-            // Affichage des noms pour les statuts
+            // Affichage des noms pour le tooltip
             const workingNames = statuses.working.map(s => s.users?.name || '?').join(', ');
             const todoNames = statuses.todo.map(s => s.users?.name || '?').join(', ');
             const skilledNames = statuses.skilled.map(s => s.users?.name || '?').join(', ');
@@ -379,28 +652,30 @@ const UIApp = {
             const row = document.querySelector(`tr[data-partition-id="${partitionId}"]`);
             if (!row) return;
 
-            // Mettre à jour les cellules de status
+            // Mettre à jour les cellules de status (ordre: todo, working, skilled)
             const cells = row.querySelectorAll('.status-cell');
 
             if (cells[0]) {
-                cells[0].className = `status-cell ${userStatus === 'working' ? 'active' : ''}`;
-                cells[0].innerHTML = `🐫 ${workingNames || ''}`;
-                cells[0].title = workingNames || 'Personne';
+                cells[0].className = `status-cell ${userStatus === 'todo' ? 'active' : ''}`;
+                cells[0].innerHTML = `🤔 ${todoNames || ''}`;
+                cells[0].onclick = () => UIApp.setStatus(partitionId, 'todo');
+                cells[0].title = todoNames || 'Personne';
             }
 
             if (cells[1]) {
-                cells[1].className = `status-cell ${userStatus === 'todo' ? 'active' : ''}`;
-                cells[1].innerHTML = `🤔 ${todoNames || ''}`;
-                cells[1].title = todoNames || 'Personne';
+                cells[1].className = `status-cell ${userStatus === 'working' ? 'active' : ''}`;
+                cells[1].innerHTML = `🐫 ${workingNames || ''}`;
+                cells[1].onclick = () => UIApp.setStatus(partitionId, 'working');
+                cells[1].title = workingNames || 'Personne';
             }
 
             if (cells[2]) {
                 cells[2].className = `status-cell ${userStatus === 'skilled' ? 'active' : ''}`;
                 cells[2].innerHTML = `✅ ${skilledNames || ''}`;
+                cells[2].onclick = () => UIApp.setStatus(partitionId, 'skilled');
                 cells[2].title = skilledNames || 'Personne';
             }
 
-            console.log(`✅ Statuts mis à jour pour partition ${partitionId}`);
         } catch (error) {
             console.error('❌ Error updating status cells:', error);
         }
@@ -409,24 +684,102 @@ const UIApp = {
     /**
      * Afficher les suggestions
      */
-    async showSuggestions(query) {
-        const suggestionsDiv = document.getElementById('suggestions');
+    filterPartitions() {
+        const titleQuery = document.getElementById('newTitle').value.toLowerCase();
+        const artistQuery = document.getElementById('newArtist').value.toLowerCase();
 
-        if (!query || query.length < 2) {
-            suggestionsDiv.innerHTML = '';
-            return;
+        // Filtrer le tableau pour montrer les partitions correspondantes
+        const rows = document.querySelectorAll('#partitionsTableBody tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const title = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
+            const artist = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
+
+            // Afficher si le titre ET artiste correspondent
+            const matches = (titleQuery === '' || title.includes(titleQuery)) &&
+                           (artistQuery === '' || artist.includes(artistQuery));
+
+            if (matches) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Mettre à jour le compteur et les stats GLOBALES (pas filtrées)
+        const counterElement = document.getElementById('partitionsCounter');
+        if (counterElement) {
+            counterElement.textContent = visibleCount;
         }
 
-        const suggestions = await SupabaseData.searchPartitions(query);
+        // Afficher les stats GLOBALES peu importe le filtre actuel
+        this.updateStats(visibleCount, this.globalStats.todo, this.globalStats.working, this.globalStats.skilled);
 
-        if (suggestions.length === 0) {
-            suggestionsDiv.innerHTML = '';
-            return;
+        // Afficher les suggestions si titre saisi
+        if (titleQuery.length >= 2) {
+            const matchingPartitions = this.partitionsCache?.filter(p =>
+                p.title.toLowerCase().includes(titleQuery)
+            ) || [];
+
+            const suggestionsDiv = document.getElementById('suggestions');
+            const suggestions = matchingPartitions.slice(0, 5);
+
+            if (suggestions.length > 0) {
+                suggestionsDiv.innerHTML = suggestions
+                    .map(p => `
+                        <div class="suggestion-item" onclick="UIApp.selectSuggestion('${p.title.replaceAll("'", "\\'")}')">
+                            <strong>${p.title}</strong> - ${p.artist}
+                        </div>
+                    `)
+                    .join('');
+            } else {
+                suggestionsDiv.innerHTML = '';
+            }
+        } else {
+            document.getElementById('suggestions').innerHTML = '';
+        }
+    },
+
+    /**
+     * Mettre à jour les stats (compteur et graphique)
+     */
+    updateStats(visibleCount, todoCount, workingCount, skilledCount) {
+        const counterElement = document.getElementById('partitionsCounter');
+        if (counterElement) {
+            counterElement.textContent = visibleCount;
         }
 
-        suggestionsDiv.innerHTML = suggestions
-            .map(title => `<div class="suggestion-item" onclick="UIApp.selectSuggestion('${title}')">${title}</div>`)
-            .join('');
+        // Créer le graphique en barres horizontales
+        const chart = document.getElementById('statsChart');
+        if (chart && visibleCount > 0) {
+            const total = todoCount + workingCount + skilledCount;
+            const todoPercent = (todoCount / total) * 100;
+            const workingPercent = (workingCount / total) * 100;
+            const skilledPercent = (skilledCount / total) * 100;
+
+            chart.innerHTML = `
+                <div style="display: flex; gap: 2px; border-radius: 4px; overflow: hidden; width: 200px; height: 100%; background: #eee;">
+                    ${todoCount > 0 ? `<div style="width: ${todoPercent}%; background: #ff9800; title: 'Todo: ${todoCount}';"></div>` : ''}
+                    ${workingCount > 0 ? `<div style="width: ${workingPercent}%; background: #f44336; title: 'En cours: ${workingCount}';"></div>` : ''}
+                    ${skilledCount > 0 ? `<div style="width: ${skilledPercent}%; background: #4caf50; title: 'Maîtrisé: ${skilledCount}';"></div>` : ''}
+                </div>
+                <span style="font-size: 0.85em; color: #666; margin-left: 8px;">${todoCount}|${workingCount}|${skilledCount}</span>
+            `;
+        } else {
+            chart.innerHTML = '';
+        }
+    },
+
+    /**
+     * Sélectionner une suggestion (ancien code)
+     */
+    selectSuggestion(title) {
+        document.getElementById('newTitle').value = title;
+        document.getElementById('suggestions').innerHTML = '';
+        document.getElementById('newArtist').focus();
+        this.filterPartitions();
     },
 
     /**
@@ -769,7 +1122,6 @@ const UIApp = {
             row.style.display = matches ? '' : 'none';
         });
 
-        console.log(`🔍 Recherche: "${searchTerm}"`);
     },
 
     /**
@@ -780,12 +1132,13 @@ const UIApp = {
         const tbody = document.getElementById('partitionsTableBody');
         const rows = Array.from(tbody.querySelectorAll('tr'));
 
-        // Déterminer l'index de la colonne
+        // Déterminer l'index de la colonne (ordre: User, Title, Artist, Status, Modified)
         let columnIndex = 0;
-        if (columnName === 'title') columnIndex = 0;
-        else if (columnName === 'artist') columnIndex = 1;
-        else if (columnName === 'user') columnIndex = 2;
+        if (columnName === 'user') columnIndex = 0;
+        else if (columnName === 'title') columnIndex = 1;
+        else if (columnName === 'artist') columnIndex = 2;
         else if (columnName === 'status') columnIndex = 3;
+        else if (columnName === 'modified') columnIndex = 4;
 
         // Déterminer la direction du tri
         const header = document.querySelector(`th[data-column="${columnName}"]`);
@@ -818,7 +1171,39 @@ const UIApp = {
             header.classList.add('desc');
         }
 
-        console.log(`📊 Tri: ${columnName} ${isAsc ? '↑' : '↓'}`);
+    },
+
+    /**
+     * Filtre ULTRA-RAPIDE des partitions (réutilise le DOM, pas de recharge!)
+     */
+    quickFilter(filter = 'all') {
+        this.currentFilter = filter;
+
+        // Si le cache n'existe pas, utiliser les données du DOM
+        const rows = document.querySelectorAll('#partitionsTableBody tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const partitionId = row.dataset.partitionId;
+            const userStatus = this.userStatusesCache?.[partitionId];
+
+            // Afficher/cacher selon le filtre
+            if (filter === 'all' || userStatus === filter) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Mettre à jour le compteur et les stats GLOBALES (pas filtrées)
+        const counterElement = document.getElementById('partitionsCounter');
+        if (counterElement) {
+            counterElement.textContent = visibleCount;
+        }
+
+        // Afficher les stats GLOBALES peu importe le filtre actuel
+        this.updateStats(visibleCount, this.globalStats.todo, this.globalStats.working, this.globalStats.skilled);
     }
 };
 

@@ -48,6 +48,7 @@ const UILogin = {
                         UI.currentUserEmoji = emoji;
                         UI.currentUserColorPrimary = colorPrimary;
                         UI.currentUserColorSecondary = colorSecondary;
+                        document.getElementById('customizationOverlay').classList.add('active');
                         UICustomization.showCustomizationPage();
                     });
 
@@ -127,43 +128,8 @@ const UILogin = {
 
             const newUserId = data[0].id;
 
-            // Ajouter les instruments
-            if (UI.newUserInstruments.length > 0) {
-                // D'abord, ajouter à la table instruments (master list)
-                for (const inst of UI.newUserInstruments) {
-                    const { data: existing } = await supabase
-                        .from('instruments')
-                        .select('name')
-                        .eq('name', inst);
 
-                    if (!existing || existing.length === 0) {
-                        const { error: instrumentError } = await supabase
-                            .from('instruments')
-                            .insert([{ name: inst }]);
-
-                        if (instrumentError) {
-                            console.warn(`⚠️ Could not add ${inst} to instruments table:`, instrumentError.message);
-                            // Continuer quand même
-                        }
-                    }
-                }
-
-                // Ensuite, ajouter à user_instruments
-                const instrumentsToInsert = UI.newUserInstruments.map(inst => ({
-                    user_id: newUserId,
-                    instrument: inst
-                }));
-
-                const { error: instError } = await supabase
-                    .from('user_instruments')
-                    .insert(instrumentsToInsert);
-
-                if (instError) throw instError;
-            }
-
-            console.log(`✅ User registered: ${username}`);
-
-            // Nettoyer
+            // Nettoyer l'état
             UI.newUserInstruments = [];
             document.getElementById('newUsername').value = '';
             this.updateAvailableInstrumentsUI();
@@ -171,13 +137,139 @@ const UILogin = {
             // Recharger les utilisateurs
             await this.populateUserSelect();
 
-            // Login automatiquement et afficher customization
+            // Configurer le nouvel utilisateur comme utilisateur courant
             UI.currentUserId = newUserId;
             UI.currentUserName = username;
-            UICustomization.showCustomizationPage();
+            UI.currentUserEmoji = '🎵';
+            UI.currentUserColorPrimary = '#ff4758';
+            UI.currentUserColorSecondary = '#f8f9fa';
+
+            // Afficher l'overlay de customization (MÊME overlay que pour les utilisateurs existants)
+            document.getElementById('loginPage').classList.remove('active');
+            document.getElementById('customizationOverlay').classList.add('active');
+
+            // Initialiser avec l'overlay de customization
+            await UICustomization.showCustomizationPage();
+            console.log('🎨 Showing customization overlay for new user');
         } catch (error) {
             alert('Erreur: ' + error.message);
         }
+    },
+
+    /**
+     * Afficher et initialiser la page de vérification des instruments
+     */
+    async showInstrumentsVerificationPage() {
+        console.log('📋 Initializing instruments verification page');
+
+        // Initialiser la liste des instruments sélectionnés
+        this.verificationSelectedInstruments = [];
+
+        // Afficher les instruments sélectionnés (vide pour nouvel utilisateur)
+        this.updateVerificationDisplay();
+
+        // Charger et afficher les instruments disponibles
+        const availableInstruments = UI.availableInstruments;
+        const verificationGrid = document.getElementById('verificationAvailableInstrumentsGrid');
+
+        if (!verificationGrid) {
+            console.error('❌ Verification grid not found in DOM');
+            return;
+        }
+
+        if (availableInstruments.length === 0) {
+            console.warn('⚠️ No available instruments found');
+            verificationGrid.innerHTML = '<p style="color: #999;">Aucun instrument disponible</p>';
+        } else {
+            verificationGrid.innerHTML = availableInstruments
+                .map(instrument => `
+                    <button class="instrument-btn" onclick="UILogin.toggleVerificationInstrument('${instrument}')" data-instrument="${instrument}">
+                        ${instrument}
+                    </button>
+                `)
+                .join('');
+        }
+
+        // Event listeners
+        const continueBtn = document.getElementById('continueBtn');
+        if (continueBtn) {
+            continueBtn.onclick = async () => {
+                console.log('✅ Continue button clicked');
+                // Sauvegarder les instruments sélectionnés
+                if (this.verificationSelectedInstruments.length > 0) {
+                    try {
+                        const instrumentsToInsert = this.verificationSelectedInstruments.map(inst => ({
+                            user_id: UI.currentUserId,
+                            instrument: inst
+                        }));
+
+                        const { error } = await supabase
+                            .from('user_instruments')
+                            .insert(instrumentsToInsert);
+
+                        if (error) throw error;
+                    } catch (error) {
+                        console.error('❌ Error saving instruments:', error);
+                        alert('Erreur: ' + error.message);
+                        return;
+                    }
+                } else {
+                }
+
+                // Fermer la page de vérification
+                document.getElementById('instrumentsVerificationPage').classList.remove('active');
+
+                // Montrer la page de customization pour customiser emoji et couleurs
+                document.getElementById('customizationOverlay').classList.add('active');
+                await UICustomization.showCustomizationPage();
+            };
+        } else {
+            console.error('❌ Continue button not found');
+        }
+
+        const closeBtn = document.getElementById('closeVerificationBtn');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                document.getElementById('instrumentsVerificationPage').classList.remove('active');
+                document.getElementById('loginPage').classList.add('active');
+                // Reload user list to show newly created user
+                UILogin.populateUserSelect();
+            };
+        } else {
+            console.error('❌ Close button not found');
+        }
+    },
+
+    /**
+     * Mettre à jour l'affichage des instruments sélectionnés
+     */
+    updateVerificationDisplay() {
+        const userInstrumentsDisplay = document.getElementById('userInstrumentsDisplay');
+
+        if (!this.verificationSelectedInstruments || this.verificationSelectedInstruments.length === 0) {
+            userInstrumentsDisplay.innerHTML = '<p style="color: #999; font-size: 0.9em;">Aucun instrument sélectionné</p>';
+        } else {
+            userInstrumentsDisplay.innerHTML = this.verificationSelectedInstruments
+                .map(inst => `<div class="instrument-badge">${inst}</div>`)
+                .join('');
+        }
+    },
+
+    /**
+     * Basculer instrument dans la page de vérification
+     */
+    toggleVerificationInstrument(instrument) {
+        const btn = document.querySelector(`[data-instrument="${instrument}"]`);
+
+        if (this.verificationSelectedInstruments.includes(instrument)) {
+            this.verificationSelectedInstruments = this.verificationSelectedInstruments.filter(i => i !== instrument);
+            btn?.classList.remove('selected');
+        } else {
+            this.verificationSelectedInstruments.push(instrument);
+            btn?.classList.add('selected');
+        }
+
+        this.updateVerificationDisplay();
     }
 };
 
