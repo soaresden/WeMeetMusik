@@ -29,7 +29,8 @@
             <div class="register-section">
                 <div class="register-content">
                     <h2>Nouvel utilisateur</h2>
-                    <input type="text" id="newUsername" placeholder="Ton nom">
+                    <label for="newUsername" style="display: block; margin-bottom: 10px; font-weight: 500;">Ton nom</label>
+                    <input type="text" id="newUsername" name="username" placeholder="Ton nom">
 
                     <button id="registerBtn" class="btn-primary" style="margin-top: 20px;">✅ Valider</button>
                 </div>
@@ -43,22 +44,22 @@
             <button id="closeCustomizationBtn" class="btn-close-customization">✕</button>
 
             <div class="custom-form-group">
-                <label>Emoji:</label>
-                <input type="text" id="customizationEmoji" placeholder="🎵" maxlength="2" style="font-size: 1.5em; text-align: center;">
+                <label for="customizationEmoji">Emoji:</label>
+                <input type="text" id="customizationEmoji" name="emoji" placeholder="🎵" maxlength="2" style="font-size: 1.5em; text-align: center;">
             </div>
 
             <div class="custom-form-group">
-                <label>Couleur primaire:</label>
+                <label for="customizationColorPrimary">Couleur primaire:</label>
                 <div class="color-input-group">
-                    <input type="color" id="customizationColorPrimary" value="#ff4758">
+                    <input type="color" id="customizationColorPrimary" name="colorPrimary" value="#ff4758">
                     <span id="customColorPrimaryLabel">#ff4758</span>
                 </div>
             </div>
 
             <div class="custom-form-group">
-                <label>Couleur secondaire:</label>
+                <label for="customizationColorSecondary">Couleur secondaire:</label>
                 <div class="color-input-group">
-                    <input type="color" id="customizationColorSecondary" value="#f8f9fa">
+                    <input type="color" id="customizationColorSecondary" name="colorSecondary" value="#f8f9fa">
                     <span id="customColorSecondaryLabel">#f8f9fa</span>
                 </div>
             </div>
@@ -72,7 +73,8 @@
                 <div id="customizationInstrumentsGrid" class="instruments-grid" style="margin-bottom: 15px;"></div>
 
                 <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                    <input type="text" id="newInstrumentInput" placeholder="Ajouter un nouvel instrument..." style="flex: 1; margin: 0;">
+                    <label for="newInstrumentInput" style="display: none;">Nouvel instrument</label>
+                    <input type="text" id="newInstrumentInput" name="newInstrument" placeholder="Ajouter un nouvel instrument..." style="flex: 1; margin: 0;">
                     <button id="addNewInstrumentBtn" class="btn-secondary" style="width: auto; margin: 0; padding: 8px 12px;">➕</button>
                 </div>
             </div>
@@ -115,7 +117,13 @@
                     <span id="currentUser"></span>
                     <div id="userInstruments" class="user-instruments"></div>
                 </div>
-                <button id="logoutBtn" class="btn-secondary">Déconnexion</button>
+
+                <!-- Sélecteur d'utilisateurs - Vignettes -->
+                <div class="user-switcher-tiles">
+                    <div id="userTilesList" class="users-tiles-header">
+                        <!-- Rempli dynamiquement avec les vignettes -->
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -131,9 +139,9 @@
         <!-- ONGLETS DE FILTRAGE -->
         <div class="tabs-container">
             <button class="tab-btn active" data-filter="all">📋 Liste complète</button>
-            <button class="tab-btn" data-filter="todo">🤔 Ma Todo</button>
-            <button class="tab-btn" data-filter="working">🐫 En train de bosser</button>
-            <button class="tab-btn" data-filter="skilled">✅ Maîtrisés</button>
+            <button class="tab-btn" data-filter="todo">🤔 Todo</button>
+            <button class="tab-btn" data-filter="working">🐫 Je Bosse</button>
+            <button class="tab-btn" data-filter="skilled">✅ Maîtrise</button>
             <div class="counter">
                 📚 <span id="partitionsCounter">0</span> morceaux
                 <div id="statsChart" style="display: inline-flex; gap: 2px; margin-left: 20px; height: 24px; align-items: center;"></div>
@@ -144,7 +152,8 @@
         <div class="app-container">
             <!-- BARRE DE RECHERCHE -->
             <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="🔍 Chercher titre, artiste, user..." class="search-input">
+                <label for="searchInput" style="display: none;">Chercher</label>
+                <input type="text" id="searchInput" name="search" placeholder="🔍 Chercher titre, artiste, user..." class="search-input">
             </div>
 
             <!-- LOADING INDICATOR -->
@@ -179,8 +188,10 @@
 
         <!-- FORMULAIRE D'AJOUT (en bas) -->
         <div class="add-partition-bar">
-            <input type="text" id="newTitle" placeholder="Titre" class="add-input">
-            <input type="text" id="newArtist" placeholder="Artiste" class="add-input">
+            <label for="newTitle" style="display: none;">Titre</label>
+            <input type="text" id="newTitle" name="title" placeholder="Titre" class="add-input">
+            <label for="newArtist" style="display: none;">Artiste</label>
+            <input type="text" id="newArtist" name="artist" placeholder="Artiste" class="add-input">
             <button id="addPartitionBtn" class="btn-primary">➕ Ajouter</button>
         </div>
 
