@@ -24,15 +24,6 @@ const UIApp = {
 
         console.log('✅ Page app affichée');
 
-        document.getElementById('currentUser').textContent = UI.currentUserName;
-
-        // Afficher les instruments avec l'emoji de l'user
-        const instruments = await SupabaseData.getUserInstruments(UI.currentUserId);
-        const userEmoji = UI.currentUserEmoji || '🎵';
-        document.getElementById('userInstruments').textContent = instruments.length > 0
-            ? userEmoji + ' ' + instruments.join(', ')
-            : '';
-
         console.log('📋 Chargement de la table...');
         // Charger la table
         await this.loadAndRenderTable();
@@ -135,16 +126,6 @@ const UIApp = {
                     // Mettre à jour les vignettes (marquer celle-ci comme active)
                     document.querySelectorAll('.user-tile').forEach(t => t.classList.remove('active'));
                     tile.classList.add('active');
-
-                    // Mettre à jour le header immédiatement
-                    document.getElementById('currentUser').textContent = UI.currentUserName;
-
-                    // Charger les instruments du nouvel utilisateur
-                    const instruments = await SupabaseData.getUserInstruments(UI.currentUserId);
-                    const userEmoji = UI.currentUserEmoji || '🎵';
-                    document.getElementById('userInstruments').textContent = instruments.length > 0
-                        ? userEmoji + ' ' + instruments.join(', ')
-                        : '';
 
                     // Charger SEULEMENT les statuts du nouvel utilisateur (pas les partitions!)
                     console.log('📥 Chargement des statuts...');
